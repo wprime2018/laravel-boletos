@@ -14,7 +14,7 @@
     }
   ],
   "require": {
-    "php": ">5.5.0",
+    "php": "^7.2|^8.0|^8.1|^8.2|^8.3|^8.4",
     "ext-intl": "*",
     "ext-mbstring": "*",
     "laravel/framework": "^6.0|^7.0|^8.0|^9.0|^10.0|^11.0|^12.0",
@@ -23,11 +23,11 @@
     "ext-curl": "*",
     "ext-json": "*",
     "ext-openssl": "*",
-    "eduardokum/laravel-mail-auto-embed": "dev-master",
+    "eduardokum/laravel-mail-auto-embed": "^2.12",
     "chillerlan/php-qrcode": "^3.0|^4.0|^5.0"
   },
   "require-dev": {
-    "phpunit/phpunit": "^6.0|^7.0|^8.0|^9.0|^10.0|^11.0",
+    "phpunit/phpunit": "^8.5.30|^9.0|^10.0|^11.0|^12.0",
     "orchestra/testbench": "^4.0|^5.0|^6.0|^7.0|^8.0|^9.0|^10.0",
     "friendsofphp/php-cs-fixer": "*"
   },
@@ -42,17 +42,53 @@
     }
   },
   "config": {
-    "allow-plugins": true,
-    "policy": {
-      "advisories": {
-        "ignore": [
-          "laravel/framework"
-        ]
-      }
-    }
+    "allow-plugins": true
   },
   "scripts": {
     "php-cs-fixer-check": "vendor/bin/php-cs-fixer fix --diff --verbose --dry-run",
     "php-cs-fixer": "vendor/bin/php-cs-fixer fix --verbose"
   }
+],
+"require": {
+  "php": ">5.5.0",
+  "ext-intl": "*",
+  "ext-mbstring": "*",
+  "laravel/framework": "^6.0|^7.0|^8.0|^9.0|^10.0|^11.0|^12.0",
+  "neitanod/forceutf8": "^2.0",
+  "setasign/fpdf": "^1.8",
+  "ext-curl": "*",
+  "ext-json": "*",
+  "ext-openssl": "*",
+  "eduardokum/laravel-mail-auto-embed": "dev-master",
+  "chillerlan/php-qrcode": "^3.0|^4.0|^5.0"
+},
+"require-dev": {
+  "phpunit/phpunit": "^6.0|^7.0|^8.0|^9.0|^10.0|^11.0",
+  "orchestra/testbench": "^4.0|^5.0|^6.0|^7.0|^8.0|^9.0|^10.0",
+  "friendsofphp/php-cs-fixer": "*"
+},
+"autoload": {
+  "psr-4": {
+    "Eduardokum\\LaravelBoleto\\": "src"
+  }
+},
+"autoload-dev": {
+  "psr-4": {
+    "Eduardokum\\LaravelBoleto\\Tests\\": "tests"
+  }
+},
+"config": {
+  "allow-plugins": true,
+  "policy": {
+    "advisories": {
+      "ignore": [
+        "laravel/framework"
+      ]
+    }
+  }
+},
+"scripts": {
+  "php-cs-fixer-check": "vendor/bin/php-cs-fixer fix --diff --verbose --dry-run",
+  "php-cs-fixer": "vendor/bin/php-cs-fixer fix --verbose"
+}
 }
