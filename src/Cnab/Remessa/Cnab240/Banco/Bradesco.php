@@ -127,6 +127,9 @@ class Bradesco extends AbstractRemessa implements RemessaContract
         $this->segmentoP($boleto);
         $this->segmentoQ($boleto);
         $this->segmentoR($boleto);
+        if ($boleto->validarPix()) {
+            $this->segmentoY04($boleto);
+        }
         if ($boleto->getSacadorAvalista()) {
             $this->segmentoY01($boleto);
         }
@@ -333,6 +336,67 @@ class Bradesco extends AbstractRemessa implements RemessaContract
     }
 
     /**
+     * @param BoletoContract $boleto
+     *
+     * @return Bradesco
+     * @throws ValidationException
+     */
+    public function segmentoY04(BoletoContract $boleto)
+    {
+        $tipoChave = [
+            $boleto::TIPO_CHAVEPIX_CPF       => '1',
+            $boleto::TIPO_CHAVEPIX_CNPJ      => '2',
+            $boleto::TIPO_CHAVEPIX_CELULAR   => '3',
+            $boleto::TIPO_CHAVEPIX_EMAIL     => '4',
+            $boleto::TIPO_CHAVEPIX_ALEATORIA => '5',
+        ];
+        $pixType = $boleto->getPixChaveTipo();
+        $pixKey = (string) $boleto->getPixChave();
+        $email = '';
+        $ddd = '00';
+        $cellNumber = '000000000';
+
+        if ($pixType === $boleto::TIPO_CHAVEPIX_EMAIL) {
+            $email = $pixKey;
+        }
+
+        if ($pixType === $boleto::TIPO_CHAVEPIX_CELULAR) {
+            $cellDigits = Util::onlyNumbers($pixKey);
+            if (strlen($cellDigits) === 13 && substr($cellDigits, 0, 2) === '55') {
+                $cellDigits = substr($cellDigits, 2);
+            }
+
+            $ddd = Util::formatCnab('9', substr($cellDigits, 0, 2), 2);
+            $cellNumber = Util::formatCnab('9', substr($cellDigits, 2, 9), 9);
+        }
+
+        $this->iniciaDetalhe();
+        $this->add(1, 3, Util::onlyNumbers($this->getCodigoBanco()));
+        $this->add(4, 7, '0001');
+        $this->add(8, 8, '3');
+        $this->add(9, 13, Util::formatCnab('9', $this->iRegistrosLote, 5));
+        $this->add(14, 14, 'Y');
+        $this->add(15, 15, '');
+        $this->add(16, 17, self::OCORRENCIA_REMESSA);
+        if ($boleto->getStatus() == $boleto::STATUS_BAIXA) {
+            $this->add(16, 17, self::OCORRENCIA_PEDIDO_BAIXA);
+        }
+        if ($boleto->getStatus() == $boleto::STATUS_ALTERACAO) {
+            $this->add(16, 17, self::OCORRENCIA_ALT_OUTROS_DADOS);
+        }
+        $this->add(18, 19, '03');
+        $this->add(20, 69, Util::formatCnab('X', $email, 50));
+        $this->add(70, 71, $ddd);
+        $this->add(72, 80, $cellNumber);
+        $this->add(81, 81, $tipoChave[$pixType] ?? '');
+        $this->add(82, 158, Util::formatCnab('X', $pixKey, 77));
+        $this->add(159, 193, Util::formatCnab('X', $boleto->getID(), 35));
+        $this->add(194, 240, '');
+
+        return $this;
+    }
+
+    /**
      * @return Bradesco
      * @throws ValidationException
      */
@@ -361,7 +425,7 @@ class Bradesco extends AbstractRemessa implements RemessaContract
         $this->add(143, 143, 1);
         $this->add(144, 151, $this->getDataRemessa('dmY'));
         $this->add(152, 157, date('His'));
-        $this->add(158, 163, Util::formatCnab('9', $this->getIdremessa(), 6));
+        $this->add(158, 163, Util::formatCnab('9', substr((string) $this->getIdremessa(), -6), 6));
         $this->add(164, 166, '084');
         $this->add(167, 171, '01600');
         $this->add(172, 211, '');

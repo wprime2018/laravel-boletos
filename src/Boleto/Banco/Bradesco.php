@@ -51,16 +51,18 @@ class Bradesco extends AbstractBoleto implements BoletoContract
      * @var string
      */
     protected $especiesCodigo240 = [
-        'DM' => '01', //Duplicata
-        'NP' => '02', //Nota Promissória
-        'NS' => '03', //Nota de Seguro
-        'CS' => '04', //Cobrança Seriada
-        'RC' => '05', //Recibo
-        'LC' => '10', //Letras de Câmbio
-        'ND' => '11', //Nota de Débito
-        'DS' => '12', //Duplicata de Serv.
-        'BP' => '30', //Boleto de Proposta
-        'O'  => '99', //Outros,
+        'DM'  => '02', // Duplicata Mercantil
+        'DMI' => '03', // Duplicata Mercantil p/ Indicacao
+        'DS'  => '04', // Duplicata de Servico
+        'DSI' => '05', // Duplicata de Servico p/ Indicacao
+        'LC'  => '07', // Letra de Cambio
+        'NP'  => '12', // Nota Promissoria
+        'NS'  => '16', // Nota de Seguro
+        'RC'  => '17', // Recibo
+        'ND'  => '19', // Nota de Debito
+        'CC'  => '31', // Cartao de Credito
+        'BP'  => '32', // Boleto de Proposta
+        'O'   => '99', // Outros
     ];
 
     /**
