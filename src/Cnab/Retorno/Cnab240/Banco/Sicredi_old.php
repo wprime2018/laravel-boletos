@@ -46,20 +46,6 @@ class Sicredi extends AbstractRetorno implements RetornoCnab240
         '36' => 'Baixa rejeitada',
         '51' => 'Título DDA reconhecido pelo pagador',
         '52' => 'Título DDA não reconhecido pelo pagador',
-        '61' => 'Liquidação PIX',
-        '78' => 'Confirmação de recebimento de pedido de negativação',
-        '79' => 'Confirmação de recebimento de pedido de exclusão de negativação',
-        '80' => 'Confirmação de entrada de negativação',
-        '81' => 'Entrada de negativação rejeitada',
-        '82' => 'Confirmação de exclusão de negativação',
-        '83' => 'Exclusão de Negativação rejeitada',
-        '84' => 'Exclusão de negativação por outros motivos',
-        '85' => 'Ocorrência informacional por outros motivos',
-        '91' => 'Intenção de pagamento',
-        'P1' => 'Confirmado COM QrCode',
-        'P2' => 'Confirmado SEM QrCode',
-        'P3' => 'Chave Inválida',
-        'P6' => 'txid em duplicidade/invalido',
     ];
 
     /**
@@ -68,15 +54,6 @@ class Sicredi extends AbstractRetorno implements RetornoCnab240
      * @var array
      */
     private $rejeicoes = [
-        '12' => 'Tipo de documento inválido',
-        '13' => 'Identificação da emissão do boleto inválida',
-        '14' => 'Identificação da distribuição do boleto inválida',
-        '15' => 'Características da cobrança incompatíveis',
-        '16' => 'Data de vencimento inválida',
-        '17' => 'Data de vencimento anterior a data de emissão',
-        '18' => 'Vencimento fora do prazo de operação',
-        '20' => 'Valor do título inválido',
-        '21' => 'Espécie do título inválida',
         '22' => 'Espécie do título não permitida para a carteira',
         '23' => 'Aceite inválido',
         '24' => 'Data da emissão inválida',
@@ -101,15 +78,15 @@ class Sicredi extends AbstractRetorno implements RetornoCnab240
         '46' => 'Tipo/número de inscrição do pagador inválidos',
         '47' => 'Endereço do pagador não informado',
         '48' => 'CEP inválido',
-        '53' => 'Tipo/número de inscrição do Beneficiário Final inválido',
-        '54' => 'Beneficiário Final não informado',
+        '53' => 'Tipo/número de inscrição do pagador/avalista inválido',
+        '54' => 'Pagador/avalista não informado',
         '55' => 'Nosso número no banco correspondente não informado',
         '56' => 'Código do banco correspondente não informado',
         '57' => 'Código da multa inválido',
         '58' => 'Data da multa inválida',
         '59' => 'Valor/percentual da multa inválido',
         '60' => 'Movimento para título não cadastrado',
-        '61' => 'Liquidação PIX',
+        '61' => 'Alteração da cooperativa crédito/agência cobradora/DV inválida',
         '62' => 'Tipo de impressão inválido',
         '63' => 'Entrada para título já cadastrado',
         '64' => 'Número da linha inválido',
@@ -118,15 +95,7 @@ class Sicredi extends AbstractRetorno implements RetornoCnab240
         '84' => 'Número autorização inexistente',
         '85' => 'Título com pagamento vinculado',
         '86' => 'Seu número inválido',
-        '87' => 'Código para protesto inválido',
-        '82' => 'Instrução Inválida',
-        '86' => 'Tipo de comando de instrução inválida para beneficiário pessoa física',
-        'N1' => 'Decurso de prazo',
-        'N2' => 'Determinação judicial',
-        'N3' => 'Solicitação da empresa conveniada',
-        'N4' => 'Devolução de comunicado pelos correios',
-        'N5' => 'Diversos',
-        'S1' => 'Rejeitado pela empresa de negativação parceira',
+        'A4' => 'Pagador DDA',
     ];
 
     /**
@@ -212,182 +181,65 @@ class Sicredi extends AbstractRetorno implements RetornoCnab240
     protected function processarDetalhe(array $detalhe)
     {
         $d = $this->detalheAtual();
-        $segmentType = $this->getSegmentType($detalhe);
 
-        if ($segmentType == 'T') {
-            $this->processarSegmentoT($detalhe, $d);
+        if ($this->getSegmentType($detalhe) == 'T') {
+            $d->setOcorrencia($this->rem(16, 17, $detalhe))
+                ->setOcorrenciaDescricao(Arr::get($this->ocorrencias, $this->detalheAtual()->getOcorrencia(), 'Desconhecida'))
+                ->setNossoNumero($this->rem(38, 57, $detalhe))
+                ->setCarteira($this->rem(58, 58, $detalhe))
+                ->setNumeroDocumento($this->rem(59, 73, $detalhe))
+                ->setDataVencimento($this->rem(74, 81, $detalhe))
+                ->setValor(Util::nFloat($this->rem(82, 96, $detalhe) / 100, 2, false))
+                ->setNumeroControle($this->rem(106, 130, $detalhe))
+                ->setPagador([
+                    'nome'      => $this->rem(149, 188, $detalhe),
+                    'documento' => $this->rem(134, 148, $detalhe),
+                ])
+                ->setValorTarifa(Util::nFloat($this->rem(199, 213, $detalhe) / 100, 2, false));
+
+            /**
+             * ocorrencias
+             */
+            $msgAdicional = str_split(sprintf('%08s', $this->rem(214, 223, $detalhe)), 2) + array_fill(0, 5, '');
+            if ($d->hasOcorrencia('06', '17')) {
+                $this->totais['liquidados']++;
+                $d->setOcorrenciaTipo($d::OCORRENCIA_LIQUIDADA);
+            } elseif ($d->hasOcorrencia('02')) {
+                $this->totais['entradas']++;
+                if (array_search('a4', array_map('strtolower', $msgAdicional)) !== false) {
+                    $d->getPagador()->setDda(true);
+                }
+                $d->setOcorrenciaTipo($d::OCORRENCIA_ENTRADA);
+            } elseif ($d->hasOcorrencia('09')) {
+                $this->totais['baixados']++;
+                $d->setOcorrenciaTipo($d::OCORRENCIA_BAIXADA);
+            } elseif ($d->hasOcorrencia('25')) {
+                $this->totais['protestados']++;
+                $d->setOcorrenciaTipo($d::OCORRENCIA_PROTESTADA);
+            } elseif ($d->hasOcorrencia('27', '14')) {
+                $this->totais['alterados']++;
+                $d->setOcorrenciaTipo($d::OCORRENCIA_ALTERACAO);
+            } elseif ($d->hasOcorrencia('03', '26', '30', '36')) {
+                $this->totais['erros']++;
+                $error = Util::appendStrings(Arr::get($this->rejeicoes, $msgAdicional[0], ''), Arr::get($this->rejeicoes, $msgAdicional[1], ''), Arr::get($this->rejeicoes, $msgAdicional[2], ''), Arr::get($this->rejeicoes, $msgAdicional[3], ''), Arr::get($this->rejeicoes, $msgAdicional[4], ''));
+                $d->setError($error);
+            } else {
+                $d->setOcorrenciaTipo($d::OCORRENCIA_OUTROS);
+            }
         }
 
-        if ($segmentType == 'U') {
-            $this->processarSegmentoU($detalhe, $d);
-        }
-
-        if ($segmentType == 'Y') {
-            $this->processarSegmentoY($detalhe, $d);
+        if ($this->getSegmentType($detalhe) == 'U') {
+            $d->setValorMulta(Util::nFloat($this->rem(18, 32, $detalhe) / 100, 2, false))
+                ->setValorDesconto(Util::nFloat($this->rem(33, 47, $detalhe) / 100, 2, false))
+                ->setValorAbatimento(Util::nFloat($this->rem(48, 62, $detalhe) / 100, 2, false))
+                ->setValorIOF(Util::nFloat($this->rem(63, 77, $detalhe) / 100, 2, false))
+                ->setValorRecebido(Util::nFloat($this->rem(78, 92, $detalhe) / 100, 2, false))
+                ->setValorTarifa($d->getValorRecebido() - Util::nFloat($this->rem(93, 107, $detalhe) / 100, 2, false))
+                ->setDataOcorrencia($this->rem(138, 145, $detalhe))
+                ->setDataCredito($this->rem(146, 153, $detalhe));
         }
 
         return true;
-    }
-
-    /**
-     * Processa o segmento T (Obrigatório - Retorno)
-     * Conforme manual CNAB 240 Sicredi - página 59
-     *
-     * @param array $detalhe
-     * @param $d
-     * @return void
-     */
-    protected function processarSegmentoT(array $detalhe, $d)
-    {
-        $d->setOcorrencia($this->rem(16, 17, $detalhe))
-            ->setOcorrenciaDescricao(Arr::get($this->ocorrencias, $this->detalheAtual()->getOcorrencia(), 'Desconhecida'))
-            ->setNossoNumero($this->rem(38, 57, $detalhe))
-            ->setCarteira($this->rem(58, 58, $detalhe))
-            ->setNumeroDocumento($this->rem(59, 73, $detalhe))
-            ->setDataVencimento($this->rem(74, 81, $detalhe))
-            ->setValor(Util::nFloat($this->rem(82, 96, $detalhe) / 100, 2, false))
-            ->setNumeroControle($this->rem(106, 130, $detalhe))
-            ->setPagador([
-                'nome'      => $this->rem(149, 188, $detalhe),
-                'documento' => $this->rem(134, 148, $detalhe),
-            ])
-            ->setValorTarifa(Util::nFloat($this->rem(199, 213, $detalhe) / 100, 2, false));
-
-        /**
-         * ocorrencias
-         */
-        $msgAdicional = str_split(sprintf('%010s', $this->rem(214, 223, $detalhe)), 2) + array_fill(0, 5, '');
-        $ocorrencia = $d->getOcorrencia();
-
-        if (in_array($ocorrencia, ['06', '17', '61'])) {
-            $this->totais['liquidados']++;
-            $d->setOcorrenciaTipo($d::OCORRENCIA_LIQUIDADA);
-        } elseif ($ocorrencia == '02') {
-            $this->totais['entradas']++;
-            if (array_search('84', array_map('strtolower', $msgAdicional)) !== false) {
-                $d->getPagador()->setDda(true);
-            }
-            $d->setOcorrenciaTipo($d::OCORRENCIA_ENTRADA);
-        } elseif ($ocorrencia == '09') {
-            $this->totais['baixados']++;
-            $d->setOcorrenciaTipo($d::OCORRENCIA_BAIXADA);
-        } elseif ($ocorrencia == '25') {
-            $this->totais['protestados']++;
-            $d->setOcorrenciaTipo($d::OCORRENCIA_PROTESTADA);
-        } elseif (in_array($ocorrencia, ['27', '14'])) {
-            $this->totais['alterados']++;
-            $d->setOcorrenciaTipo($d::OCORRENCIA_ALTERACAO);
-        } elseif (in_array($ocorrencia, ['03', '26', '30', '36'])) {
-            $this->totais['erros']++;
-            $error = Util::appendStrings(
-                Arr::get($this->rejeicoes, $msgAdicional[0], ''),
-                Arr::get($this->rejeicoes, $msgAdicional[1], ''),
-                Arr::get($this->rejeicoes, $msgAdicional[2], ''),
-                Arr::get($this->rejeicoes, $msgAdicional[3], ''),
-                Arr::get($this->rejeicoes, $msgAdicional[4], '')
-            );
-            $d->setError($error);
-        } else {
-            $d->setOcorrenciaTipo($d::OCORRENCIA_OUTROS);
-        }
-    }
-
-    /**
-     * Processa o segmento U (Obrigatório - Retorno)
-     * Conforme manual CNAB 240 Sicredi - página 62
-     *
-     * @param array $detalhe
-     * @param $d
-     * @return void
-     */
-    protected function processarSegmentoU(array $detalhe, $d)
-    {
-        $d->setValorMulta(Util::nFloat($this->rem(18, 32, $detalhe) / 100, 2, false))
-            ->setValorDesconto(Util::nFloat($this->rem(33, 47, $detalhe) / 100, 2, false))
-            ->setValorAbatimento(Util::nFloat($this->rem(48, 62, $detalhe) / 100, 2, false))
-            ->setValorIOF(Util::nFloat($this->rem(63, 77, $detalhe) / 100, 2, false))
-            ->setValorRecebido(Util::nFloat($this->rem(78, 92, $detalhe) / 100, 2, false))
-            ->setValorTarifa($d->getValorRecebido() - Util::nFloat($this->rem(93, 107, $detalhe) / 100, 2, false))
-            ->setDataOcorrencia($this->rem(138, 145, $detalhe))
-            ->setDataCredito($this->rem(146, 153, $detalhe));
-    }
-
-    /**
-     * Processa o segmento Y (Pode conter Y01, Y03, Y04)
-     * 
-     * Segmento Y03 - Obrigatório quando emissão Boleto Híbrido – Retorno
-     * Conforme manual CNAB 240 Sicredi - página 64
-     * 
-     * @param array $detalhe
-     * @param $d
-     * @return void
-     */
-    protected function processarSegmentoY(array $detalhe, $d)
-    {
-        // Verifica o código do registro para identificar qual tipo de Y
-        // Posição 18-19: Código do registro
-        $codigoRegistro = $this->rem(18, 19, $detalhe);
-
-        // Segmento Y03 - Boleto Híbrido (PIX)
-        // Conforme manual página 64
-        if ($codigoRegistro == '03') {
-            $this->processarSegmentoY03($detalhe, $d);
-        }
-
-        // Segmento Y01 - Beneficiário Final (já implementado no processamento do Q)
-        // Segmento Y04 é apenas para remessa
-    }
-
-    /**
-     * Processa o segmento Y03 (Boleto Híbrido - Retorno)
-     * Conforme manual CNAB 240 Sicredi - página 64
-     * 
-     * Layout do Segmento Y03:
-     * Posição 09-13: Nº sequencial do registro
-     * Posição 14-14: Código do segmento "Y"
-     * Posição 15-15: Sem preenchimento
-     * Posição 16-17: Código do Movimento de retorno
-     * Posição 18-19: Código do registro "03"
-     * Posição 20-69: Sem preenchimento (50 posições)
-     * Posição 70-71: Sem preenchimento (2 posições)
-     * Posição 72-80: Sem preenchimento (9 posições)
-     * Posição 81-81: Tipo de chave PIX (1 posição) - 12.4Y
-     * Posição 82-158: URL do QrCode (77 posições) - 13.4Y
-     * Posição 159-193: TXID (35 posições) - 14.4Y
-     * Posição 194-240: CNAB - Sem preenchimento (48 posições)
-     *
-     * @param array $detalhe
-     * @param $d
-     * @return void
-     */
-    protected function processarSegmentoY03(array $detalhe, $d)
-    {
-        // 12.4Y - Tipo de chave PIX (posição 81)
-        // Domínio: 1-CPF, 2-CNPJ, 3-Celular, 4-Email, 5-Chave Aleatória
-        $tipoChave = $this->rem(81, 81, $detalhe);
-        
-        // Mapeamento do tipo de chave para descrição
-        $tiposChave = [
-            '1' => 'CPF',
-            '2' => 'CNPJ',
-            '3' => 'Celular',
-            '4' => 'Email',
-            '5' => 'Chave Aleatória',
-        ];
-
-        // 13.4Y - URL do QrCode (posição 82-158, 77 caracteres)
-        $urlQrCode = $this->rem(82, 158, $detalhe);
-
-        // 14.4Y - TXID (posição 159-193, 35 caracteres)
-        // Código de Identificação do Qr Code. Id da transação do QrCode dinâmico.
-        $txid = $this->rem(159, 193, $detalhe);
-
-        // Armazena as informações do PIX no detalhe
-        // Você pode adicionar métodos específicos na classe Detalhe para armazenar esses dados
-        $d->setPixTipoChave($tipoChave);
-        $d->setPixTipoChaveDescricao(Arr::get($tiposChave, $tipoChave, ''));
-        $d->setPixUrlQrCode($urlQrCode);
-        $d->setPixTxid($txid);
     }
 
     /**

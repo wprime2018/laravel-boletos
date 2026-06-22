@@ -80,10 +80,6 @@ class Sicredi extends AbstractRemessa implements RemessaContract
         if ($boleto->getSacadorAvalista()) {
             $this->segmentoY01($boleto);
         }
-        // Segmento Y04 obrigatório quando emissão de boleto híbrido (com PIX)
-        if ($boleto->validarPix()) {
-            $this->segmentoY04($boleto);
-        }
 
         return $this;
     }
@@ -192,7 +188,7 @@ class Sicredi extends AbstractRemessa implements RemessaContract
         if ($boleto->getDesconto() > 0) {
             $this->add(18, 18, '1'); // '1' = Valor fixo até a data informada
             $this->add(19, 26, $boleto->getDataDesconto() ? $boleto->getDataDesconto()->format('dmY') : $boleto->getDataVencimento()->format('dmY'));
-            $this->add(27, 41, Util::formatCnab('9', $boleto->getDesconto(), 13, 2));
+            $this->add(27, 41, Util::formatCnab('9', $boleto->getMulta(), 13, 2));
         }
 
         $this->add(42, 42, '');
@@ -309,54 +305,6 @@ class Sicredi extends AbstractRemessa implements RemessaContract
         $this->add(139, 153, Util::formatCnab('X', $boleto->getSacadorAvalista()->getCidade(), 15));
         $this->add(154, 155, Util::formatCnab('X', $boleto->getSacadorAvalista()->getUf(), 2));
         $this->add(156, 240, '');
-
-        return $this;
-    }
-
-    /**
-     * Segmento Y04 - Obrigatório quando emissão de boleto híbrido (com PIX)
-     * Conforme manual CNAB 240 Sicredi - página 53
-     * 
-     * @param BoletoContract $boleto
-     * @return Sicredi
-     * @throws ValidationException
-     */
-    public function segmentoY04(BoletoContract $boleto)
-    {
-        // Mapeamento do tipo de chave PIX conforme manual (página 53)
-        // O campo 12.4Y (Tipo de chave) fica em branco pois o Sicredi não valida
-        // O campo 13.4Y (Chave PIX) recebe a chave disponibilizada no PIX
-        // O campo 14.4Y (TXID) fica em branco pois o Sicredi irá gerar um TXID e vincular ao título
-        
-        $this->iniciaDetalhe();
-        $this->add(1, 3, Util::onlyNumbers($this->getCodigoBanco()));
-        $this->add(4, 7, '0001');
-        $this->add(8, 8, '3');
-        $this->add(9, 13, Util::formatCnab('9', $this->iRegistrosLote, 5));
-        $this->add(14, 14, 'Y');
-        $this->add(15, 15, '');
-        $this->add(16, 17, self::OCORRENCIA_REMESSA);
-        if ($boleto->getStatus() == $boleto::STATUS_BAIXA) {
-            $this->add(16, 17, self::OCORRENCIA_PEDIDO_BAIXA);
-        }
-        if ($boleto->getStatus() == $boleto::STATUS_ALTERACAO) {
-            $this->add(16, 17, self::OCORRENCIA_ALT_OUTROS_DADOS);
-        }
-        // 08.4Y - Código do registro: "04" (página 53)
-        $this->add(18, 19, '04');
-        // 09.4Y a 11.4Y - Sem preenchimento (em branco)
-        $this->add(20, 69, Util::formatCnab('X', '', 50));
-        $this->add(70, 70, '0');
-        $this->add(71, 79, Util::formatCnab('9', '', 9));
-        // 12.4Y - Tipo de chave: Em branco (Sicredi não valida)
-        $this->add(80, 80, '');
-        // 13.4Y - Chave PIX (chave aleatória disponibilizada no PIX) - posição 81 a 158 (77 caracteres)
-        // Conforme manual: "Chave PIX (chave aleatória disponibilizada no PIX)"
-        $this->add(81, 157, Util::formatCnab('X', (string) $boleto->getPixChave(), 77));
-        // 14.4Y - TXID: Em branco. Sicredi irá gerar um TXID e vincular ao título.
-        $this->add(158, 192, Util::formatCnab('X', '', 35));
-        // 15.4Y - CNAB: Sem preenchimento
-        $this->add(193, 240, Util::formatCnab('X', '', 48));
 
         return $this;
     }
